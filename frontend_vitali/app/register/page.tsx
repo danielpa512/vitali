@@ -1,0 +1,71 @@
+'use client';
+
+import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { fetchApi } from '@/lib/api';
+
+type Medicine = { medicamento: string; active_ingredient?: string; dosage_form?: string; route?: string };
+const input = 'mt-1 w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm outline-none focus:border-teal-600 focus:ring-2 focus:ring-teal-100';
+const specialtiesFallback = ['Alergología','Anestesiología','Cardiología','Cirugía general','Dermatología','Endocrinología','Gastroenterología','Geriatría','Ginecología y obstetricia','Hematología','Infectología','Medicina familiar','Medicina general','Medicina interna','Nefrología','Neumología','Neurología','Oftalmología','Oncología','Ortopedia y traumatología','Otorrinolaringología','Pediatría','Psiquiatría','Radiología','Reumatología','Urología'];
+export default function RegisterPage() {
+ const router=useRouter(); const [role,setRole]=useState<'PATIENT'|'DOCTOR'|'FAMILY'>('PATIENT');
+ const [fullName,setFullName]=useState(''),[email,setEmail]=useState(''),[password,setPassword]=useState('');
+ const [medicines,setMedicines]=useState<Medicine[]>([]),[medicineSearch,setMedicineSearch]=useState(''),[selectedMedicines,setSelectedMedicines]=useState<string[]>([]);
+ const [specialties,setSpecialties]=useState<string[]>(specialtiesFallback),[specialty,setSpecialty]=useState('');
+ const [documentType,setDocumentType]=useState('CC'),[documentNumber,setDocumentNumber]=useState(''),[birthDate,setBirthDate]=useState(''),[phone,setPhone]=useState(''),[weight,setWeight]=useState(''),[height,setHeight]=useState(''),[conditions,setConditions]=useState('');
+ const [professionalRegistration,setProfessionalRegistration]=useState(''),[doctorDocumentType,setDoctorDocumentType]=useState('CC'),[doctorDocumentNumber,setDoctorDocumentNumber]=useState(''),[doctorPhone,setDoctorPhone]=useState(''),[doctorBirthDate,setDoctorBirthDate]=useState(''),[university,setUniversity]=useState(''),[graduationYear,setGraduationYear]=useState(''),[yearsExperience,setYearsExperience]=useState(''),[professionalBio,setProfessionalBio]=useState('');
+ const [busy,setBusy]=useState(false),[error,setError]=useState(''),[success,setSuccess]=useState(''),[doctorPending,setDoctorPending]=useState(false);
+ useEffect(()=>{ fetchApi<Medicine[]>('/api/medicamentos').then(d=>setMedicines([...d].sort((a,b)=>a.medicamento.localeCompare(b.medicamento,'es')))).catch(()=>setError('No se pudo cargar el catálogo de medicamentos. Verifica que el backend esté activo.')); fetchApi<string[]>('/api/auth/specialties').then(d=>setSpecialties([...d].sort((a,b)=>a.localeCompare(b,'es')))).catch(()=>{}); },[]);
+ const filteredMedicines=useMemo(()=>medicines.filter(m=>`${m.medicamento} ${m.active_ingredient||''}`.toLowerCase().includes(medicineSearch.toLowerCase())).slice(0,150),[medicines,medicineSearch]);
+ const toggleMedicine=(name:string)=>setSelectedMedicines(prev=>prev.includes(name)?prev.filter(x=>x!==name):[...prev,name]);
+ async function submit(e:React.FormEvent){e.preventDefault();setBusy(true);setError('');setSuccess('');try{
+  let endpoint='/api/auth/register/patient'; let body:any={fullName,email,password};
+  if(role==='PATIENT') body={...body,documentType,documentNumber,birthDate:birthDate||null,phone,weight:weight?Number(weight):null,height:height?Number(height):null,conditions,medications:selectedMedicines.join('\n')};
+  if(role==='DOCTOR'){endpoint='/api/auth/register/doctor';body={...body,professionalRegistration,specialty,documentType:doctorDocumentType,documentNumber:doctorDocumentNumber,phone:doctorPhone,birthDate:doctorBirthDate||null,university,graduationYear:graduationYear?Number(graduationYear):null,yearsExperience:yearsExperience?Number(yearsExperience):null,consultationMode:'VIRTUAL',professionalBio};}
+  if(role==='FAMILY') endpoint='/api/auth/register/family';
+  await fetchApi(endpoint,{method:'POST',body:JSON.stringify(body)});
+  if(role==='DOCTOR'){setDoctorPending(true);window.scrollTo({top:0,behavior:'smooth'});return;}
+  setSuccess('Registro exitoso. Ya puedes iniciar sesión.');window.scrollTo({top:0,behavior:'smooth'});setTimeout(()=>router.push('/login'),2500);
+ }catch(e:any){setError(e.message||'No fue posible completar el registro.');window.scrollTo({top:0,behavior:'smooth'});}finally{setBusy(false)}}
+ if(doctorPending) return <main className="flex min-h-screen items-center justify-center bg-slate-50 px-4 py-10"><div className="w-full max-w-lg rounded-3xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+  <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-amber-100"><svg className="h-8 w-8 animate-spin text-amber-600 [animation-duration:3s]" fill="none" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" className="opacity-25"/><path d="M12 2a10 10 0 0 1 10 10" stroke="currentColor" strokeWidth="3" strokeLinecap="round"/></svg></div>
+  <h1 className="mt-5 text-2xl font-bold text-slate-900">Solicitud en revisión</h1>
+  <p className="mt-2 text-sm text-slate-600">Gracias, <b>{fullName}</b>. Tu registro como médico se envió correctamente y está <b>pendiente de aprobación</b> por un administrador.</p>
+  <div className="mt-5 space-y-2 rounded-2xl bg-slate-50 p-4 text-left text-sm text-slate-600">
+   <p><span className="font-semibold text-slate-800">Correo:</span> {email}</p>
+   <p><span className="font-semibold text-slate-800">Especialidad:</span> {specialty}</p>
+   <p><span className="font-semibold text-slate-800">Registro profesional:</span> {professionalRegistration}</p>
+  </div>
+  <p className="mt-5 text-xs text-amber-700">Mientras tu cuenta esté en revisión no podrás iniciar sesión. Cuando el administrador verifique tu registro profesional, podrás ingresar con tu correo y contraseña.</p>
+  <Link href="/login" className="mt-6 inline-block w-full rounded-xl bg-teal-700 px-4 py-3 font-semibold text-white transition hover:bg-teal-800">Ir a iniciar sesión</Link>
+ </div></main>;
+ return <main className="min-h-screen bg-slate-50 px-4 py-10"><div className="mx-auto max-w-3xl rounded-3xl border border-slate-200 bg-white p-6 shadow-sm sm:p-9">
+  <div className="mb-7 text-center"><p className="text-sm font-bold uppercase tracking-[.2em] text-teal-700">Viatli</p><h1 className="mt-2 text-2xl font-bold text-slate-900">Crear una cuenta</h1><p className="mt-1 text-sm text-slate-500">Registra tus datos para comenzar.</p></div>
+  {error&&<p role="alert" className="mb-4 rounded-xl bg-red-50 p-3 text-sm text-red-700">{error}</p>}{success&&<p role="status" className="mb-4 rounded-xl bg-teal-50 p-3 text-sm text-teal-800">{success}</p>}
+  <form onSubmit={submit} className="space-y-5">
+   <label className="block text-sm font-medium text-slate-700">Tipo de usuario<select className={input} value={role} onChange={e=>setRole(e.target.value as any)}><option value="PATIENT">Paciente</option><option value="DOCTOR">Médico</option><option value="FAMILY">Familiar</option></select></label>
+   <div className="grid gap-4 sm:grid-cols-2"><label className="block text-sm font-medium text-slate-700">Nombre completo<input className={input} required maxLength={120} value={fullName} onChange={e=>setFullName(e.target.value)}/></label><label className="block text-sm font-medium text-slate-700">Correo electrónico<input className={input} type="email" required value={email} onChange={e=>setEmail(e.target.value)}/></label></div>
+   <label className="block text-sm font-medium text-slate-700">Contraseña<input className={input} type="password" required minLength={12} maxLength={72} value={password} onChange={e=>setPassword(e.target.value)}/><span className="mt-1 block text-xs font-normal text-slate-500">Mínimo 12 caracteres.</span></label>
+   {role==='PATIENT'&&<section className="space-y-4 border-t border-slate-100 pt-5"><h2 className="font-semibold text-slate-900">Información del paciente</h2>
+    <div className="grid gap-4 sm:grid-cols-3"><label className="text-sm font-medium">Tipo documento<select className={input} value={documentType} onChange={e=>setDocumentType(e.target.value)}><option value="CC">Cédula de ciudadanía</option><option value="TI">Tarjeta de identidad</option><option value="CE">Cédula de extranjería</option><option value="PASSPORT">Pasaporte</option></select></label><label className="text-sm font-medium">Número documento<input className={input} value={documentNumber} onChange={e=>setDocumentNumber(e.target.value)}/></label><label className="text-sm font-medium">Fecha de nacimiento<input className={input} type="date" value={birthDate} onChange={e=>setBirthDate(e.target.value)}/></label></div>
+    <div className="grid gap-4 sm:grid-cols-3"><label className="text-sm font-medium">Teléfono<input className={input} value={phone} onChange={e=>setPhone(e.target.value)}/></label><label className="text-sm font-medium">Peso (kg)<input className={input} type="number" step="0.1" value={weight} onChange={e=>setWeight(e.target.value)}/></label><label className="text-sm font-medium">Estatura (cm)<input className={input} type="number" value={height} onChange={e=>setHeight(e.target.value)}/></label></div>
+    <label className="block text-sm font-medium">Condiciones médicas<textarea className={input} rows={2} maxLength={2000} value={conditions} onChange={e=>setConditions(e.target.value)} placeholder="Ej. hipertensión, diabetes..."/></label>
+    <div className="rounded-2xl border border-slate-200 p-4"><div className="flex flex-wrap items-center justify-between gap-2"><div><h3 className="font-semibold text-slate-900">Medicamentos actuales</h3><p className="text-xs text-slate-500">Selecciona los que utilizas actualmente. La lista proviene del catálogo de la base de datos.</p></div><span className="rounded-full bg-teal-50 px-3 py-1 text-xs font-semibold text-teal-800">{selectedMedicines.length} seleccionados</span></div>
+     <input className={input} placeholder="Buscar medicamento o principio activo..." value={medicineSearch} onChange={e=>setMedicineSearch(e.target.value)}/>
+     <div className="mt-3 max-h-64 space-y-1 overflow-y-auto rounded-xl border border-slate-100 p-2">{filteredMedicines.map(m=><label key={m.medicamento} className="flex cursor-pointer items-start gap-3 rounded-lg px-2 py-2 text-sm hover:bg-slate-50"><input type="checkbox" className="mt-1 accent-teal-700" checked={selectedMedicines.includes(m.medicamento)} onChange={()=>toggleMedicine(m.medicamento)}/><span><span className="block font-medium text-slate-800">{m.medicamento}</span><span className="text-xs text-slate-500">{m.active_ingredient||'Principio activo no especificado'}{m.dosage_form?` · ${m.dosage_form}`:''}</span></span></label>)}{!filteredMedicines.length&&<p className="p-3 text-sm text-slate-500">No se encontraron medicamentos.</p>}</div>
+     {!!selectedMedicines.length&&<div className="mt-3 flex flex-wrap gap-2">{selectedMedicines.map(m=><button type="button" key={m} onClick={()=>toggleMedicine(m)} className="rounded-full bg-teal-50 px-3 py-1 text-xs text-teal-800">{m} ×</button>)}</div>}
+    </div>
+   </section>}
+   {role==='DOCTOR'&&<section className="space-y-4 border-t border-slate-100 pt-5"><h2 className="font-semibold text-slate-900">Información profesional y personal</h2>
+    <div className="grid gap-4 sm:grid-cols-2"><label className="text-sm font-medium">Registro profesional / RETHUS<input className={input} required value={professionalRegistration} onChange={e=>setProfessionalRegistration(e.target.value)} placeholder="Número de registro"/></label><label className="text-sm font-medium">Especialidad<select className={input} required value={specialty} onChange={e=>setSpecialty(e.target.value)}><option value="">Selecciona tu especialidad</option>{specialties.map(x=><option key={x} value={x}>{x}</option>)}</select></label>
+    <label className="text-sm font-medium">Tipo de documento<select className={input} value={doctorDocumentType} onChange={e=>setDoctorDocumentType(e.target.value)}><option value="CC">Cédula de ciudadanía</option><option value="CE">Cédula de extranjería</option><option value="PASSPORT">Pasaporte</option></select></label><label className="text-sm font-medium">Número de documento<input className={input} required value={doctorDocumentNumber} onChange={e=>setDoctorDocumentNumber(e.target.value)}/></label>
+    <label className="text-sm font-medium">Teléfono<input className={input} required value={doctorPhone} onChange={e=>setDoctorPhone(e.target.value)}/></label><label className="text-sm font-medium">Fecha de nacimiento<input className={input} type="date" value={doctorBirthDate} onChange={e=>setDoctorBirthDate(e.target.value)}/></label>
+    <label className="text-sm font-medium">Universidad<input className={input} required value={university} onChange={e=>setUniversity(e.target.value)}/></label><label className="text-sm font-medium">Año de grado<input className={input} type="number" min="1950" max={new Date().getFullYear()} value={graduationYear} onChange={e=>setGraduationYear(e.target.value)}/></label>
+    <label className="text-sm font-medium">Años de experiencia<input className={input} type="number" min="0" max="70" value={yearsExperience} onChange={e=>setYearsExperience(e.target.value)}/></label><label className="text-sm font-medium">Modalidad de consulta<input className={input} value="Virtual" readOnly aria-readonly="true" /></label></div>
+    <label className="block text-sm font-medium">Perfil profesional<textarea className={input} rows={3} maxLength={1200} value={professionalBio} onChange={e=>setProfessionalBio(e.target.value)} placeholder="Describe brevemente tu experiencia y áreas de atención."/></label><p className="text-xs text-amber-700">Tu cuenta quedará pendiente hasta que el administrador verifique tu registro profesional.</p>
+   </section>}
+   <button disabled={busy} className="w-full rounded-xl bg-teal-700 px-4 py-3 font-semibold text-white transition hover:bg-teal-800 disabled:opacity-50">{busy?'Registrando...':'Crear cuenta'}</button>
+  </form><p className="mt-6 text-center text-sm text-slate-500">¿Ya tienes cuenta? <Link className="font-semibold text-teal-700 hover:underline" href="/login">Inicia sesión</Link></p>
+ </div></main>;
+}

@@ -1,0 +1,6 @@
+-- Viatli: nuevas columnas de vínculo familiar.
+-- Hibernate `ddl-auto=update` las crea automáticamente al iniciar el backend:
+-- family_links.relationship
+-- family_links.relationship_details
+-- No ejecutar ALTER TABLE a ciegas sobre una base ya migrada, porque SQLite
+-- no admite ADD COLUMN IF NOT EXISTS en todas las versiones.
